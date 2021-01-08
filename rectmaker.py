@@ -71,6 +71,60 @@ class Particles(pygame.sprite.Sprite):
             self.kill()
 
 
+def main_game(scr):
+    berries_group = pygame.sprite.Group()
+    walls_group = pygame.sprite.Group()
+
+    class berry(pygame.sprite.Sprite):
+        image = pygame.surface.Surface((10, 10))
+        image.fill((60, 245, 67))
+        pygame.draw.circle(image, (245, 160, 60), (5, 5), 5)
+
+        def __init__(self, pos, group):
+            super().__init__(group)
+            self.image = berry.image
+            self.rect = self.image.get_rect()
+            self.rect.x = pos[0] + 23
+            self.rect.y = pos[1] + 10
+
+    class wall(pygame.sprite.Sprite):
+        image = pygame.surface.Surface((57.14, 29))
+        pygame.draw.rect(image, (160, 60, 245), ((0, 0), (56.14, 28)))
+
+        def __init__(self, pos, group):
+            super().__init__(group)
+            self.image = wall.image
+            self.rect = self.image.get_rect()
+            self.rect.x = pos[0]
+            self.rect.y = pos[1]
+
+    def load_lvl(lvl_file):
+        with open(lvl_file, 'r') as lvl:
+            lvl = lvl.read().split('\n')
+            for i in range(len(lvl)):
+                for y in range(len(lvl[i])):
+                    if y < 28:
+                        if lvl[i][y] == '.':
+                            wall((y * 57.14, i * 29), walls_group)
+                        elif lvl[i][y] == '+':
+                            berry((y * 57.14, i * 29), berries_group)
+
+    load_lvl(os.path.join('data', 'lvl.txt'))
+
+    main_game_running = True
+    while main_game_running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return 'quit'
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
+                    return 'pause'
+        scr.fill((60, 245, 67))
+        berries_group.draw(scr)
+        walls_group.draw(scr)
+        pygame.display.flip()
+
+
 def pause(scr):
     """Функция для создания экрана паузы"""
     rain_frames_group = pygame.sprite.Group()
@@ -133,12 +187,10 @@ def pause(scr):
                 elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
                     pos_y += 1
                 elif event.key == pygame.K_ESCAPE:
-                    # return 'main_game' #
-                    return 'quit'
+                    return 'main_game'
                 elif event.key == pygame.K_SPACE:
                     if pos_y % 3 == 0:
-                        # return 'main_game' #
-                        return 'quit'
+                        return 'main_game'
                     elif pos_y % 3 == 1:
                         return 'settings'
                     elif pos_y % 3 == 2:
@@ -180,7 +232,6 @@ def main_menu(scr):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return 'quit'
-            # Реакция на нажатие определённых клавиш на клавиатуре, не реагируют на действия мыши
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP or event.key == pygame.K_w:
                     pos_y -= 1
@@ -190,8 +241,7 @@ def main_menu(scr):
                     return 'quit'
                 elif event.key == pygame.K_SPACE:
                     if pos_y % 3 == 0:
-                        # return 'main_game' #
-                        return 'quit'
+                        return 'main_game'
                     elif pos_y % 3 == 1:
                         scr.fill((0, 0, 0))
                         return 'settings'
@@ -295,8 +345,9 @@ if __name__ == '__main__':
     sound_volume = 10
 
     running = True
-    # Стартовое окно(обычно главное меню), пауза поставлена, т.к готова только она
+    # Стартовое окно
     cur_screen = 'main_menu'
+    # Предыдущее окно(нужно чтобы было понятно куда выходить из настроек
     prev_screen = ''
     # Основной цикл
     while running:
@@ -307,10 +358,9 @@ if __name__ == '__main__':
             prev_screen = cur_screen
             cur_screen = pause(screen)
         elif cur_screen == 'main_game':
-            # cur_screen = main_game() #
+            cur_screen = main_game(screen)
             pass
         elif cur_screen == 'settings':
-            print(prev_screen)
             cur_screen = settings(screen)
             pass
         elif cur_screen == 'quit':
