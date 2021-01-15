@@ -283,7 +283,6 @@ def settings(scr):
     # scr.blit(settings_image, (0, 0))
     settings_buttons.draw(scr)
     if pos_y % 3 == 2 and len(settings_rects[0]) != 4:
-        print(1)
         settings_rects[0][pos_y % 3].checked_draw(scr)
     elif len(settings_rects[0]) == 4 and pos_y % 4 == 3 or pos_y % 4 == 2:
         settings_rects[0][pos_y % 4].checked_draw(scr)
@@ -307,10 +306,7 @@ def settings(scr):
                             Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), cur_lvl,
                                            settings_buttons))
                         if len(lvl) > 4:
-                            print(lvl[-4:] == '.txt', lvl in os.listdir(path="data"))
-                            print(lvl, lvl[-4:], lvl[0])
                             if lvl[-4:] == '.txt' and lvl in os.listdir(path="data"):
-                                print(1, lvl)
                                 settings_rects[0][3].kill()
                                 settings_rects[0][3] = Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23),
                                                                       lvl, settings_buttons)
@@ -325,10 +321,8 @@ def settings(scr):
                         lvl = ''
                     elif event.key == pygame.K_BACKSPACE:
                         if len(lvl) > 0:
-                            print(lvl)
                             x = lvl[:-1]
                             lvl = x
-                            print(lvl)
                         settings_rects[0][3].kill()
                         settings_rects[0][3] = (
                             Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), lvl,
