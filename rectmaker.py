@@ -72,28 +72,29 @@ class Particles(pygame.sprite.Sprite):
 
 
 def main_game(scr):
+    global cur_lvl
     berries_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
 
     class berry(pygame.sprite.Sprite):
-        image = pygame.surface.Surface((10, 10))
-        image.fill((60, 245, 67))
-        pygame.draw.circle(image, (245, 160, 60), (5, 5), 5)
-
-        def __init__(self, pos, group):
+        def __init__(self, pos, params, dp, group):
+            """pos - x, y; params - w, h; dp - сдвиг, чтоб по центру было"""
             super().__init__(group)
-            self.image = berry.image
+            self.image = pygame.surface.Surface(params)
+            self.image.fill((176, 224, 230))
+            pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
+                               (params[0] + params[1]) / 4)
             self.rect = self.image.get_rect()
-            self.rect.x = pos[0] + 23
-            self.rect.y = pos[1] + 10
+            self.rect.x = pos[0] + dp[0]
+            self.rect.y = pos[1] + dp[1]
 
     class wall(pygame.sprite.Sprite):
-        image = pygame.surface.Surface((57.14, 29))
-        pygame.draw.rect(image, (160, 60, 245), ((0, 0), (56.14, 28)))
-
-        def __init__(self, pos, group):
+        def __init__(self, pos, params, group):
+            """pos - x, y; params - w, h;"""
             super().__init__(group)
-            self.image = wall.image
+            self.image = pygame.surface.Surface(params)
+            pygame.draw.rect(self.image, (160, 60, 245), ((params[0] / 100, params[1] / 100),
+                                                          (params[0] - params[0] / 100, params[1] - params[1] / 100)))
             self.rect = self.image.get_rect()
             self.rect.x = pos[0]
             self.rect.y = pos[1]
@@ -101,15 +102,20 @@ def main_game(scr):
     def load_lvl(lvl_file):
         with open(lvl_file, 'r') as lvl:
             lvl = lvl.read().split('\n')
+            block_w = 1600 / len(sorted(lvl, key=lambda z: len(z))[0])
+            block_h = 900 / len(lvl)
+            ber_w = 280 / len(sorted(lvl, key=lambda z: len(z))[0])
+            ber_h = 310 / len(lvl)
             for i in range(len(lvl)):
                 for y in range(len(lvl[i])):
                     if y < 28:
                         if lvl[i][y] == '.':
-                            wall((y * 57.14, i * 29), walls_group)
+                            wall((y * block_w, i * block_h), (block_w, block_h), walls_group)
                         elif lvl[i][y] == '+':
-                            berry((y * 57.14, i * 29), berries_group)
+                            berry((y * block_w, i * block_h), (ber_w, ber_h),
+                                  (block_w / 2 - ber_w / 2, ber_h), berries_group)
 
-    load_lvl(os.path.join('data', 'lvl.txt'))
+    load_lvl(os.path.join('data', cur_lvl))
 
     main_game_running = True
     while main_game_running:
@@ -119,7 +125,7 @@ def main_game(scr):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
                     return 'pause'
-        scr.fill((60, 245, 67))
+        scr.fill((176, 224, 230))
         berries_group.draw(scr)
         walls_group.draw(scr)
         pygame.display.flip()
@@ -196,7 +202,6 @@ def pause(scr):
                     elif pos_y % 3 == 2:
                         return 'main_menu'
             elif event.type == rain_event_type:
-                scr.fill((7, 7, 8))
                 cur_frame = cur_frame % len(rain_frames)
                 for i in rain_frames_group:
                     if i.type == cur_frame:
@@ -205,8 +210,8 @@ def pause(scr):
                 cur_frame += 1
                 # отрисовка кнопок
                 pause_rects[pos_y % 3].checked_draw(scr)
-        pause_buttons.draw(scr)
-        pygame.display.flip()
+                pause_buttons.draw(scr)
+                pygame.display.flip()
 
 
 def main_menu(scr):
@@ -255,23 +260,38 @@ def main_menu(scr):
 
 
 def settings(scr):
-    global music_volume, sound_volume
+    global music_volume, sound_volume, cur_lvl
     settings_buttons = pygame.sprite.Group()
     # settings_image = pygame.transform.scale(load_image('settings.jpg', -1), (1600, 900))
     settings_rects = [
-        [Beautiful_rect(500, 120, 200, 50, (23, 254, 25), (254, 140, 23), 'MUSIC', settings_buttons),
-         Beautiful_rect(500, 420, 200, 50, (23, 254, 25), (254, 140, 23), 'SOUND', settings_buttons)],
-        [Beautiful_rect(750, 120, 60, 60, (23, 254, 25), (254, 140, 23), '+', settings_buttons),
-         Beautiful_rect(750, 420, 60, 60, (23, 254, 25), (254, 140, 23), '+', settings_buttons)],
-        [Beautiful_rect(900, 120, 60, 60, (23, 254, 25), (254, 140, 23), '-', settings_buttons),
-         Beautiful_rect(900, 420, 60, 60, (23, 254, 25), (254, 140, 23), '-', settings_buttons)],
-        [Beautiful_rect(1050, 120, 80, 60, (23, 254, 25), (254, 140, 23), f'{music_volume}', settings_buttons),
-         Beautiful_rect(1050, 420, 80, 60, (23, 254, 25), (254, 140, 23), f'{sound_volume}', settings_buttons)]
+        [Beautiful_rect(500, 120, 200, 50, (72, 209, 204), (254, 140, 23), 'MUSIC', settings_buttons),
+         Beautiful_rect(500, 320, 200, 50, (255, 105, 180), (254, 140, 23), 'SOUND', settings_buttons),
+         Beautiful_rect(500, 490, 630, 80, (23, 254, 25), (254, 140, 23), 'CHOOSE LVL', settings_buttons)],
+        [Beautiful_rect(750, 120, 60, 50, (72, 209, 204), (254, 140, 23), '+', settings_buttons),
+         Beautiful_rect(750, 320, 60, 50, (255, 105, 180), (254, 140, 23), '+', settings_buttons)],
+        [Beautiful_rect(900, 120, 60, 50, (72, 209, 204), (254, 140, 23), '-', settings_buttons),
+         Beautiful_rect(900, 320, 60, 50, (255, 105, 180), (254, 140, 23), '-', settings_buttons)],
+        [Beautiful_rect(1050, 120, 80, 50, (72, 209, 204), (254, 140, 23), f'{music_volume}', settings_buttons),
+         Beautiful_rect(1050, 320, 80, 50, (255, 105, 180), (254, 140, 23), f'{sound_volume}', settings_buttons)]
     ]
     pos_y = 0
     pos_x = 0
-    sound_enable = False
-    music_enable = False
+    lvl = ''
+    all_disable = False
+
+    scr.fill((0, 0, 0))
+    # scr.blit(settings_image, (0, 0))
+    settings_buttons.draw(scr)
+    if pos_y % 3 == 2 and len(settings_rects[0]) != 4:
+        print(1)
+        settings_rects[0][pos_y % 3].checked_draw(scr)
+    elif len(settings_rects[0]) == 4 and pos_y % 4 == 3 or pos_y % 4 == 2:
+        settings_rects[0][pos_y % 4].checked_draw(scr)
+    elif len(settings_rects[0]) != 4:
+        settings_rects[pos_x % 3][pos_y % 3].checked_draw(scr)
+    else:
+        settings_rects[pos_x % 3][pos_y % 4].checked_draw(scr)
+    pygame.display.flip()
 
     settings_running = True
     while settings_running:
@@ -279,62 +299,107 @@ def settings(scr):
             if event.type == pygame.QUIT:
                 return 'quit'
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP or event.key == pygame.K_w:
-                    pos_y -= 1
-                elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
-                    pos_y += 1
-                elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
-                    if (sound_enable or music_enable) and pos_x != 1:
-                        pos_x -= 1
-                elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
-                    if (sound_enable or music_enable) and pos_x != 2:
-                        pos_x += 1
-                elif event.key == pygame.K_ESCAPE:
-                    if music_enable:
-                        music_enable = False
-                        pos_x = 0
-                    elif sound_enable:
-                        sound_enable = False
-                        pos_x = 0
+                if all_disable:
+                    if event.key == 13 or event.key == 1073741912:
+                        all_disable = False
+                        settings_rects[0][3].kill()
+                        settings_rects[0][3] = (
+                            Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), cur_lvl,
+                                           settings_buttons))
+                        if len(lvl) > 4:
+                            print(lvl[-4:] == '.txt', lvl in os.listdir(path="data"))
+                            print(lvl, lvl[-4:], lvl[0])
+                            if lvl[-4:] == '.txt' and lvl in os.listdir(path="data"):
+                                print(1, lvl)
+                                settings_rects[0][3].kill()
+                                settings_rects[0][3] = Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23),
+                                                                      lvl, settings_buttons)
+                                cur_lvl = lvl
+                        lvl = ''
+                    elif event.key == pygame.K_ESCAPE:
+                        all_disable = False
+                        settings_rects[0][3].kill()
+                        settings_rects[0][3] = (
+                            Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), cur_lvl,
+                                           settings_buttons))
+                        lvl = ''
+                    elif event.key == pygame.K_BACKSPACE:
+                        if len(lvl) > 0:
+                            print(lvl)
+                            x = lvl[:-1]
+                            lvl = x
+                            print(lvl)
+                        settings_rects[0][3].kill()
+                        settings_rects[0][3] = (
+                            Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), lvl,
+                                           settings_buttons))
                     else:
+                        lvl += event.unicode
+                        settings_rects[0][3].kill()
+                        settings_rects[0][3] = (
+                            Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), lvl,
+                                           settings_buttons))
+                else:
+                    if event.key == pygame.K_UP or event.key == pygame.K_w:
+                        pos_y -= 1
+                    elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                        pos_y += 1
+                    elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                        pos_x -= 1
+                    elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                        pos_x += 1
+                    elif event.key == pygame.K_ESCAPE:
                         if prev_screen == 'pause':
                             return 'pause'
                         else:
                             return 'main_menu'
-                elif event.key == pygame.K_SPACE:
-                    if pos_y % 3 == 0:
-                        if pos_x == 0:
-                            music_enable = True
-                            pos_x += 1
-                        elif pos_x == 1:
-                            music_volume = (music_volume + 1) % 11
-                            settings_rects[3][0].kill()
-                            settings_rects[3][0] = Beautiful_rect(1050, 120, 60, 60, (23, 254, 25), (254, 140, 23),
-                                                                  f'{music_volume}', settings_buttons)
-                        elif pos_x == 2:
-                            music_volume = (music_volume - 1) % 11
-                            settings_rects[3][0].kill()
-                            settings_rects[3][0] = Beautiful_rect(1050, 120, 60, 60, (23, 254, 25), (254, 140, 23),
-                                                                  f'{music_volume}', settings_buttons)
-                    elif pos_y % 3 == 1:
-                        if pos_x == 0:
-                            sound_enable = True
-                            pos_x += 1
-                        elif pos_x == 1:
-                            sound_volume = (sound_volume + 1) % 11
-                            settings_rects[3][1].kill()
-                            settings_rects[3][1] = Beautiful_rect(1050, 420, 60, 60, (23, 254, 25), (254, 140, 23),
-                                                                  f'{sound_volume}', settings_buttons)
-                        elif pos_x == 2:
-                            sound_volume = (sound_volume - 1) % 11
-                            settings_rects[3][1].kill()
-                            settings_rects[3][1] = Beautiful_rect(1050, 420, 60, 60, (23, 254, 25), (254, 140, 23),
-                                                                  f'{sound_volume}', settings_buttons)
-        scr.fill((0, 0, 0))
-        # scr.blit(settings_image, (0, 0))
-        settings_buttons.draw(scr)
-        settings_rects[pos_x % 3][pos_y % 2].checked_draw(scr)
-        pygame.display.flip()
+                    elif event.key == pygame.K_SPACE:
+                        if pos_y % len(settings_rects[0]) == 0:
+                            if pos_x == 0:
+                                pos_x += 1
+                            elif pos_x == 1:
+                                music_volume = (music_volume + 1) % 11
+                                settings_rects[3][0].kill()
+                                settings_rects[3][0] = Beautiful_rect(1050, 120, 80, 50, (72, 209, 204), (254, 140, 23),
+                                                                      f'{music_volume}', settings_buttons)
+                            elif pos_x == 2:
+                                music_volume = (music_volume - 1) % 11
+                                settings_rects[3][0].kill()
+                                settings_rects[3][0] = Beautiful_rect(1050, 120, 80, 50, (72, 209, 204), (254, 140, 23),
+                                                                      f'{music_volume}', settings_buttons)
+                        elif pos_y % len(settings_rects[0]) == 1:
+                            if pos_x == 0:
+                                pos_x += 1
+                            elif pos_x == 1:
+                                sound_volume = (sound_volume + 1) % 11
+                                settings_rects[3][1].kill()
+                                settings_rects[3][1] = Beautiful_rect(1050, 320, 80, 50, (255, 105, 180),
+                                                                      (254, 140, 23),
+                                                                      f'{sound_volume}', settings_buttons)
+                            elif pos_x == 2:
+                                sound_volume = (sound_volume - 1) % 11
+                                settings_rects[3][1].kill()
+                                settings_rects[3][1] = Beautiful_rect(1050, 320, 80, 50, (255, 105, 180),
+                                                                      (254, 140, 23),
+                                                                      f'{sound_volume}', settings_buttons)
+                        elif pos_y % len(settings_rects[0]) == 2:
+                            settings_rects[0].append(
+                                Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), cur_lvl,
+                                               settings_buttons))
+                        elif pos_y % len(settings_rects[0]) == 3:
+                            all_disable = True
+                scr.fill((0, 0, 0))
+                # scr.blit(settings_image, (0, 0))
+                settings_buttons.draw(scr)
+                if pos_y % 3 == 2 and len(settings_rects[0]) != 4:
+                    settings_rects[0][pos_y % 3].checked_draw(scr)
+                elif len(settings_rects[0]) == 4 and (pos_y % 4 == 3 or pos_y % 4 == 2):
+                    settings_rects[0][pos_y % 4].checked_draw(scr)
+                elif len(settings_rects[0]) != 4:
+                    settings_rects[pos_x % 3][pos_y % 3].checked_draw(scr)
+                else:
+                    settings_rects[pos_x % 3][pos_y % 4].checked_draw(scr)
+                pygame.display.flip()
 
 
 if __name__ == '__main__':
@@ -343,6 +408,7 @@ if __name__ == '__main__':
     screen = pygame.display.set_mode(size)
     music_volume = 10
     sound_volume = 10
+    cur_lvl = 'lvl.txt'
 
     running = True
     # Стартовое окно
