@@ -4,6 +4,19 @@ import sys
 from PIL import Image, ImageSequence
 
 
+def cacher(some_func):
+    cache = {}
+
+    def new(arg, key):
+        if key in cache:
+            return cache[key]
+        else:
+            cache[key] = some_func(arg, key)
+            return cache[key]
+
+    return new
+
+
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
     if not os.path.isfile(fullname):
@@ -27,6 +40,31 @@ def frames_from_gif(frames):
         image = image.crop((0, 0, image.width, image.height - 15))
         res.append(image)
     return res
+
+
+@cacher
+def normal_frames(some_frames, key):
+    norm_frames = []
+    n = 0
+    for i in some_frames:
+        cur_image = i
+        image_mode = cur_image.mode
+        image_size = cur_image.size
+        image_data = cur_image.tobytes()
+        norm_image = pygame.transform.scale(pygame.image.fromstring(image_data, image_size, image_mode),
+                                            (1600, 900))
+        new_palette = []
+        rgb_triplet = []
+        # Из восьмибитной поверхности в поверхность rgb
+        for rgb_value in cur_image.getpalette():
+            rgb_triplet.append(rgb_value)
+            if len(rgb_triplet) == 3:
+                new_palette.append((rgb_triplet[0], rgb_triplet[1], rgb_triplet[2]))
+                rgb_triplet = []
+        norm_image.set_palette(new_palette)
+        norm_frames.append((norm_image, n))
+        n += 1
+    return norm_frames
 
 
 class Beautiful_rect(pygame.sprite.Sprite):
@@ -72,7 +110,7 @@ class Particles(pygame.sprite.Sprite):
 
 
 def main_game(scr):
-    global cur_lvl
+    global cur_lvl, lvl_params, save_lvl
     berries_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
 
@@ -81,7 +119,7 @@ def main_game(scr):
             """pos - x, y; params - w, h; dp - сдвиг, чтоб по центру было"""
             super().__init__(group)
             self.image = pygame.surface.Surface(params)
-            self.image.fill((176, 224, 230))
+            self.image.fill((0, 0, 0))
             pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
                                (params[0] + params[1]) / 4)
             self.rect = self.image.get_rect()
@@ -93,13 +131,28 @@ def main_game(scr):
             """pos - x, y; params - w, h;"""
             super().__init__(group)
             self.image = pygame.surface.Surface(params)
-            pygame.draw.rect(self.image, (160, 60, 245), ((params[0] / 100, params[1] / 100),
+            pygame.draw.rect(self.image, (65, 105, 225), ((params[0] / 100, params[1] / 100),
                                                           (params[0] - params[0] / 100, params[1] - params[1] / 100)))
             self.rect = self.image.get_rect()
             self.rect.x = pos[0]
             self.rect.y = pos[1]
 
     def load_lvl(lvl_file):
+        if type(lvl_file) == list:
+            lvl = lvl_file
+            block_w = 1600 / len(sorted(lvl, key=lambda z: len(z))[0])
+            block_h = 900 / len(lvl)
+            ber_w = 280 / len(sorted(lvl, key=lambda z: len(z))[0])
+            ber_h = 310 / len(lvl)
+            for i in range(len(lvl)):
+                for y in range(len(lvl[i])):
+                    if y < 28:
+                        if lvl[i][y] == '.':
+                            wall((y * block_w, i * block_h), (block_w, block_h), walls_group)
+                        elif lvl[i][y] == '+':
+                            berry((y * block_w, i * block_h), (ber_w, ber_h),
+                                  (block_w / 2 - ber_w / 2, ber_h), berries_group)
+            return lvl, block_w, block_h, ber_w, ber_h
         with open(lvl_file, 'r') as lvl:
             lvl = lvl.read().split('\n')
             block_w = 1600 / len(sorted(lvl, key=lambda z: len(z))[0])
@@ -114,9 +167,13 @@ def main_game(scr):
                         elif lvl[i][y] == '+':
                             berry((y * block_w, i * block_h), (ber_w, ber_h),
                                   (block_w / 2 - ber_w / 2, ber_h), berries_group)
+            return lvl, block_w, block_h, ber_w, ber_h
 
-    load_lvl(os.path.join('data', cur_lvl))
-
+    if save_lvl == '':
+        lvl_params = load_lvl(os.path.join('data', cur_lvl))
+    else:
+        print('YES')
+        load_lvl(save_lvl)
     main_game_running = True
     while main_game_running:
         for event in pygame.event.get():
@@ -124,8 +181,23 @@ def main_game(scr):
                 return 'quit'
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
+                    save_lvl = ''
+                    for raw in range(len(lvl_params[0])):
+                        for column in range(len(lvl_params[0][1])):
+                            if lvl_params[0][raw][column] == '.':
+                                save_lvl += '.'
+                            elif lvl_params[0][raw][column] == '-':
+                                save_lvl += '-'
+                            else:
+                                for berry in berries_group:
+                                    if berry.rect.x == int(
+                                            lvl_params[1] * column + lvl_params[1] / 2 - lvl_params[3] / 2) \
+                                            and berry.rect.y == int(lvl_params[2] * raw + lvl_params[4]):
+                                        save_lvl += '+'
+                        save_lvl += '\n'
+                    save_lvl = save_lvl.split('\n')[:-1]
                     return 'pause'
-        scr.fill((176, 224, 230))
+        scr.fill((0, 0, 0))
         berries_group.draw(scr)
         walls_group.draw(scr)
         pygame.display.flip()
@@ -133,8 +205,6 @@ def main_game(scr):
 
 def pause(scr):
     """Функция для создания экрана паузы"""
-    rain_frames_group = pygame.sprite.Group()
-    pause_buttons = pygame.sprite.Group()
 
     class raining(pygame.sprite.Sprite):
         def __init__(self, im, num):
@@ -146,38 +216,19 @@ def pause(scr):
         def draw(self):
             scr.blit(self.image, self.rect)
 
-    # Таймер для паузы, все элементы будут отрисовываться с таким таймером
-    rain_event_type = pygame.USEREVENT + 1
-    pygame.time.set_timer(rain_event_type, 60)
+    rain_frames_group = pygame.sprite.Group()
+    pause_buttons = pygame.sprite.Group()
     pause_rects = [
         Beautiful_rect(550, 120, 500, 100, (220, 56, 130), (210, 56, 210), 'CONTINUE', pause_buttons),
         Beautiful_rect(550, 370, 500, 100, (120, 156, 130), (210, 56, 210), 'SETTINGS', pause_buttons),
         Beautiful_rect(550, 620, 500, 100, (220, 56, 30), (210, 210, 210), 'EXIT THE MAIN MENU', pause_buttons)
     ]
-    # Разбитие гифки дождя на фреймы
-    rain_frames = frames_from_gif(ImageSequence.Iterator(Image.open(os.path.join('data', 'rain.gif'))))
-    n = 0
-    for i in rain_frames:
-        cur_rain_image = i
-        # Преобразования для создания адекватной поверхности с изображением дождя для отрисовки на экране паузы
-        image_mode = cur_rain_image.mode
-        image_size = cur_rain_image.size
-        image_data = cur_rain_image.tobytes()
-        py_image = pygame.transform.scale(pygame.image.fromstring(image_data, image_size, image_mode),
-                                          (1600, 900))
-        new_palette = []
-        rgb_triplet = []
-        # Из восьмибитной поверхности в поверхность rgb
-        for rgb_value in cur_rain_image.getpalette():
-            rgb_triplet.append(rgb_value)
-            if len(rgb_triplet) == 3:
-                new_palette.append((rgb_triplet[0], rgb_triplet[1], rgb_triplet[2]))
-                rgb_triplet = []
-        py_image.set_palette(new_palette)
-        # Убрать белый фон дождя
-        py_image.set_colorkey((255, 255, 255))
-        raining(py_image, n)
-        n += 1
+
+    rain_event_type = pygame.USEREVENT + 1
+    rain_images = normal_frames(rain_frames, 'rain')
+    for i in rain_images:
+        raining(i[0], i[1])
+    pygame.time.set_timer(rain_event_type, 60)
     cur_frame = 0
     pos_y = 0
 
@@ -198,7 +249,7 @@ def pause(scr):
                     if pos_y % 3 == 0:
                         return 'main_game'
                     elif pos_y % 3 == 1:
-                        return 'settings'
+                        settings(scr, 'game')
                     elif pos_y % 3 == 2:
                         return 'main_menu'
             elif event.type == rain_event_type:
@@ -206,22 +257,21 @@ def pause(scr):
                 for i in rain_frames_group:
                     if i.type == cur_frame:
                         i.draw()
-                rain_frames_group.update()
+                # rain_frames_group.update()
                 cur_frame += 1
-                # отрисовка кнопок
                 pause_rects[pos_y % 3].checked_draw(scr)
                 pause_buttons.draw(scr)
                 pygame.display.flip()
 
 
 def main_menu(scr):
+    global main_menu_image
     main_menu_buttons = pygame.sprite.Group()
     main_menu_rects = [
         Beautiful_rect(550, 120, 500, 100, (23, 254, 25), (254, 140, 23), 'NEW GAME', main_menu_buttons),
         Beautiful_rect(550, 370, 500, 100, (23, 254, 25), (254, 140, 23), 'SETTINGS', main_menu_buttons),
         Beautiful_rect(550, 620, 500, 100, (23, 254, 25), (254, 140, 23), 'EXIT', main_menu_buttons)
     ]
-    main_menu_image = load_image('main_menu.png')
     pygame.draw.rect(main_menu_image, (0, 0, 0), (94, 33, 148, 37))
     pygame.draw.line(main_menu_image, (0, 0, 190), (214, 33), (214, 69))
     pygame.draw.line(main_menu_image, (0, 0, 190), (219, 33), (219, 69))
@@ -249,7 +299,7 @@ def main_menu(scr):
                         return 'main_game'
                     elif pos_y % 3 == 1:
                         scr.fill((0, 0, 0))
-                        return 'settings'
+                        settings(scr, 'menu')
                     elif pos_y % 3 == 2:
                         return 'quit'
         scr.fill((0, 0, 0))
@@ -259,8 +309,13 @@ def main_menu(scr):
         pygame.display.flip()
 
 
-def settings(scr):
-    global music_volume, sound_volume, cur_lvl
+def settings(scr, where='menu'):
+    global music_volume, sound_volume, cur_lvl, save_lvl
+    pos_y = 0
+    pos_x = 0
+    lvl = ''
+    all_disable = False
+
     settings_buttons = pygame.sprite.Group()
     # settings_image = pygame.transform.scale(load_image('settings.jpg', -1), (1600, 900))
     settings_rects = [
@@ -274,10 +329,6 @@ def settings(scr):
         [Beautiful_rect(1050, 120, 80, 50, (72, 209, 204), (254, 140, 23), f'{music_volume}', settings_buttons),
          Beautiful_rect(1050, 320, 80, 50, (255, 105, 180), (254, 140, 23), f'{sound_volume}', settings_buttons)]
     ]
-    pos_y = 0
-    pos_x = 0
-    lvl = ''
-    all_disable = False
 
     scr.fill((0, 0, 0))
     # scr.blit(settings_image, (0, 0))
@@ -311,6 +362,7 @@ def settings(scr):
                                 settings_rects[0][3] = Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23),
                                                                       lvl, settings_buttons)
                                 cur_lvl = lvl
+                                save_lvl = ''
                         lvl = ''
                     elif event.key == pygame.K_ESCAPE:
                         all_disable = False
@@ -348,6 +400,9 @@ def settings(scr):
                         else:
                             return 'main_menu'
                     elif event.key == pygame.K_SPACE:
+                        if where == 'game':
+                            pos_x = pos_x % 3
+                            pos_y = pos_y % 2
                         if pos_y % len(settings_rects[0]) == 0:
                             if pos_x == 0:
                                 pos_x += 1
@@ -385,14 +440,17 @@ def settings(scr):
                 scr.fill((0, 0, 0))
                 # scr.blit(settings_image, (0, 0))
                 settings_buttons.draw(scr)
-                if pos_y % 3 == 2 and len(settings_rects[0]) != 4:
-                    settings_rects[0][pos_y % 3].checked_draw(scr)
-                elif len(settings_rects[0]) == 4 and (pos_y % 4 == 3 or pos_y % 4 == 2):
-                    settings_rects[0][pos_y % 4].checked_draw(scr)
-                elif len(settings_rects[0]) != 4:
-                    settings_rects[pos_x % 3][pos_y % 3].checked_draw(scr)
+                if where == 'game':
+                    settings_rects[pos_x % 3][pos_y % 2].checked_draw(scr)
                 else:
-                    settings_rects[pos_x % 3][pos_y % 4].checked_draw(scr)
+                    if pos_y % 3 == 2 and len(settings_rects[0]) != 4:
+                        settings_rects[0][pos_y % 3].checked_draw(scr)
+                    elif len(settings_rects[0]) == 4 and (pos_y % 4 == 3 or pos_y % 4 == 2):
+                        settings_rects[0][pos_y % 4].checked_draw(scr)
+                    elif len(settings_rects[0]) != 4:
+                        settings_rects[pos_x % 3][pos_y % 3].checked_draw(scr)
+                    else:
+                        settings_rects[pos_x % 3][pos_y % 4].checked_draw(scr)
                 pygame.display.flip()
 
 
@@ -402,7 +460,11 @@ if __name__ == '__main__':
     screen = pygame.display.set_mode(size)
     music_volume = 10
     sound_volume = 10
+    rain_frames = frames_from_gif(ImageSequence.Iterator(Image.open(os.path.join('data', 'rain.gif'))))
+    main_menu_image = load_image('main_menu.png')
     cur_lvl = 'lvl.txt'
+    save_lvl = ''
+    lvl_params = (0, 0, 0, 0, 0)
 
     running = True
     # Стартовое окно
@@ -419,10 +481,6 @@ if __name__ == '__main__':
             cur_screen = pause(screen)
         elif cur_screen == 'main_game':
             cur_screen = main_game(screen)
-            pass
-        elif cur_screen == 'settings':
-            cur_screen = settings(screen)
-            pass
         elif cur_screen == 'quit':
             running = False
         pygame.display.flip()
