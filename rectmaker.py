@@ -113,6 +113,53 @@ def main_game(scr):
     global cur_lvl, lvl_params, save_lvl
     berries_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
+    main_hero = pygame.sprite.Group()
+    main_game_event = pygame.USEREVENT + 4
+    pygame.time.set_timer(main_game_event, 10)
+
+    class pacman(pygame.sprite.Sprite):
+        def __init__(self, pos):
+            super().__init__(main_hero)
+            pars = sorted(lvl_params[1:3])[0]
+            self.image = pygame.transform.scale(pac_image, (int(pars), int(pars)))
+            self.rect = self.image.get_rect()
+            self.dp = [pars / 30, '']
+            self.next = ''
+            self.rect.x = pos[0] + lvl_params[1] / 4
+            self.rect.y = pos[1]
+
+        def update(self, ev):
+            if event.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_w or ev.key == pygame.K_UP:
+                    self.dp[1] = 'w'
+                elif ev.key == pygame.K_s or ev.key == pygame.K_DOWN:
+                    self.dp[1] = 's'
+                elif ev.key == pygame.K_d or ev.key == pygame.K_RIGHT:
+                    if self.dp[1] == 'a':
+                        self.image = pygame.transform.flip(self.image, True, False)
+                    self.dp[1] = 'd'
+                elif ev.key == pygame.K_a or ev.key == pygame.K_LEFT:
+                    if self.dp[1] == 'd':
+                        self.image = pygame.transform.flip(self.image, True, False)
+                    self.dp[1] = 'a'
+            elif event.type == main_game_event:
+                if self.dp[1] == 'w':
+                    self.rect.y -= self.dp[0]
+                    if pygame.sprite.spritecollideany(self, walls_group):
+                        self.rect.y += self.dp[0] / 0.75
+                elif self.dp[1] == 's':
+                    self.rect.y += self.dp[0] / 0.75
+                    if pygame.sprite.spritecollideany(self, walls_group):
+                        self.rect.y -= self.dp[0]
+                elif self.dp[1] == 'd':
+                    self.rect.x += self.dp[0] / 0.75
+                    if pygame.sprite.spritecollideany(self, walls_group):
+                        self.rect.x -= self.dp[0]
+                elif self.dp[1] == 'a':
+                    self.rect.x -= self.dp[0]
+                    if pygame.sprite.spritecollideany(self, walls_group):
+                        self.rect.x += self.dp[0] / 0.75
+            pygame.sprite.spritecollide(self, berries_group, True)
 
     class berry(pygame.sprite.Sprite):
         def __init__(self, pos, params, dp, group):
@@ -144,6 +191,7 @@ def main_game(scr):
             block_h = 900 / len(lvl)
             ber_w = 280 / len(sorted(lvl, key=lambda z: len(z))[0])
             ber_h = 310 / len(lvl)
+            pac_pos = 0
             for i in range(len(lvl)):
                 for y in range(len(lvl[i])):
                     if y < 28:
@@ -152,31 +200,35 @@ def main_game(scr):
                         elif lvl[i][y] == '+':
                             berry((y * block_w, i * block_h), (ber_w, ber_h),
                                   (block_w / 2 - ber_w / 2, ber_h), berries_group)
-            return lvl, block_w, block_h, ber_w, ber_h
+            return [lvl, block_w, block_h, ber_w, ber_h, (0, 0)]
         with open(lvl_file, 'r') as lvl:
             lvl = lvl.read().split('\n')
             block_w = 1600 / len(sorted(lvl, key=lambda z: len(z))[0])
             block_h = 900 / len(lvl)
             ber_w = 280 / len(sorted(lvl, key=lambda z: len(z))[0])
             ber_h = 310 / len(lvl)
+            pac_pos = 0
             for i in range(len(lvl)):
                 for y in range(len(lvl[i])):
                     if y < 28:
                         if lvl[i][y] == '.':
                             wall((y * block_w, i * block_h), (block_w, block_h), walls_group)
+                        elif lvl[i][y] == 'P':
+                            pac_pos = y * block_w, i * block_h
                         elif lvl[i][y] == '+':
                             berry((y * block_w, i * block_h), (ber_w, ber_h),
                                   (block_w / 2 - ber_w / 2, ber_h), berries_group)
-            return lvl, block_w, block_h, ber_w, ber_h
+            return [lvl, block_w, block_h, ber_w, ber_h, pac_pos]
 
     if save_lvl == '':
         lvl_params = load_lvl(os.path.join('data', cur_lvl))
     else:
-        print('YES')
         load_lvl(save_lvl)
+    PacMan = pacman(lvl_params[-1])
     main_game_running = True
     while main_game_running:
         for event in pygame.event.get():
+            main_hero.update(event)
             if event.type == pygame.QUIT:
                 return 'quit'
             if event.type == pygame.KEYDOWN:
@@ -186,7 +238,7 @@ def main_game(scr):
                         for column in range(len(lvl_params[0][1])):
                             if lvl_params[0][raw][column] == '.':
                                 save_lvl += '.'
-                            elif lvl_params[0][raw][column] == '-':
+                            elif lvl_params[0][raw][column] == '-' or lvl_params[0][raw][column] == 'P':
                                 save_lvl += '-'
                             else:
                                 for berry in berries_group:
@@ -194,12 +246,16 @@ def main_game(scr):
                                             lvl_params[1] * column + lvl_params[1] / 2 - lvl_params[3] / 2) \
                                             and berry.rect.y == int(lvl_params[2] * raw + lvl_params[4]):
                                         save_lvl += '+'
+                            if len(save_lvl.split('\n')[raw]) != column + 1:
+                                save_lvl += '-'
                         save_lvl += '\n'
                     save_lvl = save_lvl.split('\n')[:-1]
+                    lvl_params[-1] = (PacMan.rect.x - lvl_params[1] / 4, PacMan.rect.y)
                     return 'pause'
         scr.fill((0, 0, 0))
         berries_group.draw(scr)
         walls_group.draw(scr)
+        main_hero.draw(scr)
         pygame.display.flip()
 
 
@@ -401,8 +457,8 @@ def settings(scr, where='menu'):
                             return 'main_menu'
                     elif event.key == pygame.K_SPACE:
                         if where == 'game':
-                            pos_x = pos_x % 3
                             pos_y = pos_y % 2
+                        pos_x = pos_x % 3
                         if pos_y % len(settings_rects[0]) == 0:
                             if pos_x == 0:
                                 pos_x += 1
@@ -462,9 +518,10 @@ if __name__ == '__main__':
     sound_volume = 10
     rain_frames = frames_from_gif(ImageSequence.Iterator(Image.open(os.path.join('data', 'rain.gif'))))
     main_menu_image = load_image('main_menu.png')
+    pac_image = load_image('pacman.png')
     cur_lvl = 'lvl.txt'
     save_lvl = ''
-    lvl_params = (0, 0, 0, 0, 0)
+    lvl_params = [0, 0, 0, 0, 0, (0, 0)]
 
     running = True
     # Стартовое окно
