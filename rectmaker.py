@@ -115,50 +115,55 @@ def main_game(scr):
     walls_group = pygame.sprite.Group()
     main_hero = pygame.sprite.Group()
     main_game_event = pygame.USEREVENT + 4
-    pygame.time.set_timer(main_game_event, 10)
+    pygame.time.set_timer(main_game_event, 500)
 
     class pacman(pygame.sprite.Sprite):
         def __init__(self, pos):
             super().__init__(main_hero)
             pars = sorted(lvl_params[1:3])[0]
             self.image = pygame.transform.scale(pac_image, (int(pars), int(pars)))
+            self.right_image = self.image
+            self.left_image = pygame.transform.flip(self.image, True, False)
+            self.up_image = pygame.transform.rotate(self.image, 90)
+            self.down_image = pygame.transform.rotate(self.image, 270)
+            self.true_im = 'r'
             self.rect = self.image.get_rect()
-            self.dp = [pars / 30, '']
+            self.dp = [pars, '']
             self.next = ''
-            self.rect.x = pos[0] + lvl_params[1] / 4
+            self.rect.x = pos[0]
             self.rect.y = pos[1]
 
         def update(self, ev):
             if event.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_w or ev.key == pygame.K_UP:
+                    self.image = self.up_image
                     self.dp[1] = 'w'
                 elif ev.key == pygame.K_s or ev.key == pygame.K_DOWN:
+                    self.image = self.down_image
                     self.dp[1] = 's'
                 elif ev.key == pygame.K_d or ev.key == pygame.K_RIGHT:
-                    if self.dp[1] == 'a':
-                        self.image = pygame.transform.flip(self.image, True, False)
+                    self.image = self.right_image
                     self.dp[1] = 'd'
                 elif ev.key == pygame.K_a or ev.key == pygame.K_LEFT:
-                    if self.dp[1] == 'd':
-                        self.image = pygame.transform.flip(self.image, True, False)
+                    self.image = self.left_image
                     self.dp[1] = 'a'
             elif event.type == main_game_event:
                 if self.dp[1] == 'w':
                     self.rect.y -= self.dp[0]
                     if pygame.sprite.spritecollideany(self, walls_group):
-                        self.rect.y += self.dp[0] / 0.75
+                        self.rect.y += self.dp[0]
                 elif self.dp[1] == 's':
-                    self.rect.y += self.dp[0] / 0.75
+                    self.rect.y += self.dp[0]
                     if pygame.sprite.spritecollideany(self, walls_group):
                         self.rect.y -= self.dp[0]
                 elif self.dp[1] == 'd':
-                    self.rect.x += self.dp[0] / 0.75
+                    self.rect.x += self.dp[0]
                     if pygame.sprite.spritecollideany(self, walls_group):
                         self.rect.x -= self.dp[0]
                 elif self.dp[1] == 'a':
                     self.rect.x -= self.dp[0]
                     if pygame.sprite.spritecollideany(self, walls_group):
-                        self.rect.x += self.dp[0] / 0.75
+                        self.rect.x += self.dp[0]
             pygame.sprite.spritecollide(self, berries_group, True)
 
     class berry(pygame.sprite.Sprite):
@@ -185,39 +190,40 @@ def main_game(scr):
             self.rect.y = pos[1]
 
     def load_lvl(lvl_file):
+        # Загрузка с сохранения
         if type(lvl_file) == list:
             lvl = lvl_file
-            block_w = 1600 / len(sorted(lvl, key=lambda z: len(z))[0])
-            block_h = 900 / len(lvl)
-            ber_w = 280 / len(sorted(lvl, key=lambda z: len(z))[0])
-            ber_h = 310 / len(lvl)
-            pac_pos = 0
+            block_w = 900 // len(sorted(lvl, key=lambda z: len(z))[0])
+            block_h = 900 // len(lvl)
+            ber_w = 280 // len(sorted(lvl, key=lambda z: len(z))[0])
+            ber_h = 310 // len(lvl)
             for i in range(len(lvl)):
                 for y in range(len(lvl[i])):
                     if y < 28:
                         if lvl[i][y] == '.':
-                            wall((y * block_w, i * block_h), (block_w, block_h), walls_group)
+                            wall((y * block_w + 350, i * block_h), (block_w, block_h), walls_group)
                         elif lvl[i][y] == '+':
-                            berry((y * block_w, i * block_h), (ber_w, ber_h),
-                                  (block_w / 2 - ber_w / 2, ber_h), berries_group)
+                            berry((y * block_w + 350, i * block_h), (ber_w, ber_h),
+                                  (block_w // 2 - ber_w // 2, ber_h), berries_group)
             return [lvl, block_w, block_h, ber_w, ber_h, (0, 0)]
+        # Загрузка с файла
         with open(lvl_file, 'r') as lvl:
             lvl = lvl.read().split('\n')
-            block_w = 1600 / len(sorted(lvl, key=lambda z: len(z))[0])
-            block_h = 900 / len(lvl)
-            ber_w = 280 / len(sorted(lvl, key=lambda z: len(z))[0])
-            ber_h = 310 / len(lvl)
+            block_w = 900 // len(sorted(lvl, key=lambda z: len(z))[0])
+            block_h = 900 // len(lvl)
+            ber_w = 280 // len(sorted(lvl, key=lambda z: len(z))[0])
+            ber_h = 310 // len(lvl)
             pac_pos = 0
             for i in range(len(lvl)):
                 for y in range(len(lvl[i])):
                     if y < 28:
                         if lvl[i][y] == '.':
-                            wall((y * block_w, i * block_h), (block_w, block_h), walls_group)
+                            wall((y * block_w + 350, i * block_h), (block_w, block_h), walls_group)
                         elif lvl[i][y] == 'P':
-                            pac_pos = y * block_w, i * block_h
+                            pac_pos = y * block_w + 350, i * block_h
                         elif lvl[i][y] == '+':
-                            berry((y * block_w, i * block_h), (ber_w, ber_h),
-                                  (block_w / 2 - ber_w / 2, ber_h), berries_group)
+                            berry((y * block_w + 350, i * block_h), (ber_w, ber_h),
+                                  (block_w // 2 - ber_w // 2, ber_h), berries_group)
             return [lvl, block_w, block_h, ber_w, ber_h, pac_pos]
 
     if save_lvl == '':
@@ -231,26 +237,32 @@ def main_game(scr):
             main_hero.update(event)
             if event.type == pygame.QUIT:
                 return 'quit'
+            if event.type == main_game_event:
+                save_lvl = ''
+                # Цикл создающий длинную строку, содержащую карту(x - column, y - raw)
+                for raw in range(len(lvl_params[0])):
+                    for column in range(len(lvl_params[0][1])):
+                        if lvl_params[0][raw][column] == '.':
+                            save_lvl += '.'
+                        elif lvl_params[0][raw][column] == '-' or lvl_params[0][raw][column] == 'P':
+                            save_lvl += '-'
+                        else:
+                            for berry in berries_group:
+                                if berry.rect.x == int(
+                                        lvl_params[1] * column + lvl_params[1] / 2 - lvl_params[3] / 2) + 350 \
+                                        and berry.rect.y == int(lvl_params[2] * raw + lvl_params[4]):
+                                    save_lvl += '+'
+                        if len(save_lvl.split('\n')[raw]) != column + 1:
+                            save_lvl += '-'
+                    save_lvl += '\n'
+                save_lvl = save_lvl.split('\n')[:-1]
+                # Cрань для записи положения ГГ в список строк(карту)
+                save_lvl[PacMan.rect.y // lvl_params[2]] = save_lvl[
+                    PacMan.rect.y // lvl_params[2]][:(PacMan.rect.x - 350) // lvl_params[1]] + 'P' + save_lvl[
+                    PacMan.rect.y // lvl_params[2]][(PacMan.rect.x - 350) // lvl_params[1] + 1:]
+                lvl_params[-1] = (PacMan.rect.x, PacMan.rect.y)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
-                    save_lvl = ''
-                    for raw in range(len(lvl_params[0])):
-                        for column in range(len(lvl_params[0][1])):
-                            if lvl_params[0][raw][column] == '.':
-                                save_lvl += '.'
-                            elif lvl_params[0][raw][column] == '-' or lvl_params[0][raw][column] == 'P':
-                                save_lvl += '-'
-                            else:
-                                for berry in berries_group:
-                                    if berry.rect.x == int(
-                                            lvl_params[1] * column + lvl_params[1] / 2 - lvl_params[3] / 2) \
-                                            and berry.rect.y == int(lvl_params[2] * raw + lvl_params[4]):
-                                        save_lvl += '+'
-                            if len(save_lvl.split('\n')[raw]) != column + 1:
-                                save_lvl += '-'
-                        save_lvl += '\n'
-                    save_lvl = save_lvl.split('\n')[:-1]
-                    lvl_params[-1] = (PacMan.rect.x - lvl_params[1] / 4, PacMan.rect.y)
                     return 'pause'
         scr.fill((0, 0, 0))
         berries_group.draw(scr)
