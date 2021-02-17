@@ -114,8 +114,12 @@ def main_game(scr):
     berries_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
     main_hero = pygame.sprite.Group()
+    tablets = pygame.sprite.Group()
+    checker_group = pygame.sprite.Group()
     main_game_event = pygame.USEREVENT + 4
     pygame.time.set_timer(main_game_event, 500)
+    pac_man_timer = pygame.USEREVENT + 6
+    pygame.time.set_timer(pac_man_timer, 500)
 
     class pacman(pygame.sprite.Sprite):
         def __init__(self, pos):
@@ -133,6 +137,9 @@ def main_game(scr):
             self.rect.x = pos[0]
             self.rect.y = pos[1]
 
+            self.speed = False
+            self.how_long = 0
+
         def update(self, ev):
             if event.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_w or ev.key == pygame.K_UP:
@@ -147,7 +154,7 @@ def main_game(scr):
                 elif ev.key == pygame.K_a or ev.key == pygame.K_LEFT:
                     self.image = self.left_image
                     self.dp[1] = 'a'
-            elif event.type == main_game_event:
+            elif event.type == pac_man_timer:
                 if self.dp[1] == 'w':
                     self.rect.y -= self.dp[0]
                     if pygame.sprite.spritecollideany(self, walls_group):
@@ -165,6 +172,28 @@ def main_game(scr):
                     if pygame.sprite.spritecollideany(self, walls_group):
                         self.rect.x += self.dp[0]
             pygame.sprite.spritecollide(self, berries_group, True)
+            if pygame.sprite.spritecollide(self, tablets, True):
+                pygame.time.set_timer(pac_man_timer, 250)
+                self.speed = True
+            if self.speed and event.type == pac_man_timer:
+                if self.how_long == 16:
+                    self.speed = False
+                    self.how_long = 0
+                    pygame.time.set_timer(pac_man_timer, 500)
+                else:
+                    self.how_long += 1
+
+    class tablet(pygame.sprite.Sprite):
+        def __init__(self, pos, params, dp, group):
+            super().__init__(group)
+            self.image = pygame.surface.Surface(params)
+            self.image.fill((0, 0, 0))
+            pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
+                               ((params[0] + params[1]) + (dp[0] + dp[1]) // 2) / 5)
+            self.rect = self.image.get_rect()
+            self.rect.x = pos[0] + dp[0]
+            self.rect.y = pos[1] + dp[1]
+            print(self.rect, 1)
 
     class berry(pygame.sprite.Sprite):
         def __init__(self, pos, params, dp, group):
@@ -189,6 +218,16 @@ def main_game(scr):
             self.rect.x = pos[0]
             self.rect.y = pos[1]
 
+    class checker(pygame.sprite.Sprite):
+        def __init__(self, pos, params, group):
+            super().__init__(group)
+            self.image = pygame.surface.Surface(params)
+            pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
+                               (params[0] + params[1]) / 4)
+            self.rect = self.image.get_rect()
+            self.rect.x = pos[0]
+            self.rect.y = pos[1]
+
     def load_lvl(lvl_file):
         # Загрузка с сохранения
         if type(lvl_file) == list:
@@ -197,6 +236,8 @@ def main_game(scr):
             block_h = 900 // len(lvl)
             ber_w = 280 // len(sorted(lvl, key=lambda z: len(z))[0])
             ber_h = 310 // len(lvl)
+            table_w = 480 // len(sorted(lvl, key=lambda z: len(z))[0])
+            table_h = 510 // len(lvl)
             for i in range(len(lvl)):
                 for y in range(len(lvl[i])):
                     if y < 28:
@@ -205,6 +246,10 @@ def main_game(scr):
                         elif lvl[i][y] == '+':
                             berry((y * block_w + 350, i * block_h), (ber_w, ber_h),
                                   (block_w // 2 - ber_w // 2, ber_h), berries_group)
+                        elif lvl[i][y] == 'O':
+                            tablet((y * block_w + 350, i * block_h),
+                                   (table_w, table_h),
+                                   (block_w // 2 - table_w // 2, ber_h // 1.5), tablets)
             return [lvl, block_w, block_h, ber_w, ber_h, (0, 0)]
         # Загрузка с файла
         with open(lvl_file, 'r') as lvl:
@@ -213,6 +258,8 @@ def main_game(scr):
             block_h = 900 // len(lvl)
             ber_w = 280 // len(sorted(lvl, key=lambda z: len(z))[0])
             ber_h = 310 // len(lvl)
+            table_w = 480 // len(sorted(lvl, key=lambda z: len(z))[0])
+            table_h = 510 // len(lvl)
             pac_pos = 0
             for i in range(len(lvl)):
                 for y in range(len(lvl[i])):
@@ -224,6 +271,10 @@ def main_game(scr):
                         elif lvl[i][y] == '+':
                             berry((y * block_w + 350, i * block_h), (ber_w, ber_h),
                                   (block_w // 2 - ber_w // 2, ber_h), berries_group)
+                        elif lvl[i][y] == 'O':
+                            tablet((y * block_w + 350, i * block_h),
+                                   (table_w, table_h),
+                                   (block_w // 2 - table_w // 2, ber_h // 1.5), tablets)
             return [lvl, block_w, block_h, ber_w, ber_h, pac_pos]
 
     if save_lvl == '':
@@ -247,19 +298,24 @@ def main_game(scr):
                         elif lvl_params[0][raw][column] == '-' or lvl_params[0][raw][column] == 'P':
                             save_lvl += '-'
                         else:
-                            for berry in berries_group:
-                                if berry.rect.x == int(
-                                        lvl_params[1] * column + lvl_params[1] / 2 - lvl_params[3] / 2) + 350 \
-                                        and berry.rect.y == int(lvl_params[2] * raw + lvl_params[4]):
+                            checker((int(lvl_params[1] * column + lvl_params[1] / 2 - lvl_params[3] / 2) + 350, int(
+                                lvl_params[2] * raw + lvl_params[4])),
+                                    (2, 2), checker_group)
+                            for i in checker_group:
+                                if pygame.sprite.spritecollide(i, berries_group, False):
                                     save_lvl += '+'
+                                if pygame.sprite.spritecollide(i, tablets, False):
+                                    save_lvl += 'O'
+                                i.kill()
                         if len(save_lvl.split('\n')[raw]) != column + 1:
                             save_lvl += '-'
                     save_lvl += '\n'
                 save_lvl = save_lvl.split('\n')[:-1]
-                # Cрань для записи положения ГГ в список строк(карту)
-                save_lvl[PacMan.rect.y // lvl_params[2]] = save_lvl[
-                    PacMan.rect.y // lvl_params[2]][:(PacMan.rect.x - 350) // lvl_params[1]] + 'P' + save_lvl[
-                    PacMan.rect.y // lvl_params[2]][(PacMan.rect.x - 350) // lvl_params[1] + 1:]
+                # Cрань для записи положения ГГ в список строк(карту).
+                # Она не помещадась в 1 строчку поэтому разбил её на 2.
+                before_player = save_lvl[PacMan.rect.y // lvl_params[2]][:(PacMan.rect.x - 350) // lvl_params[1]] + 'P'
+                after_him = save_lvl[PacMan.rect.y // lvl_params[2]][(PacMan.rect.x - 350) // lvl_params[1] + 1:]
+                save_lvl[PacMan.rect.y // lvl_params[2]] = before_player + after_him
                 lvl_params[-1] = (PacMan.rect.x, PacMan.rect.y)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
@@ -268,6 +324,7 @@ def main_game(scr):
         berries_group.draw(scr)
         walls_group.draw(scr)
         main_hero.draw(scr)
+        tablets.draw(scr)
         pygame.display.flip()
 
 
@@ -383,6 +440,8 @@ def settings(scr, where='menu'):
     pos_x = 0
     lvl = ''
     all_disable = False
+    music_enable = False
+    sound_enable = False
 
     settings_buttons = pygame.sprite.Group()
     # settings_image = pygame.transform.scale(load_image('settings.jpg', -1), (1600, 900))
@@ -454,7 +513,12 @@ def settings(scr, where='menu'):
                             Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23), lvl,
                                            settings_buttons))
                 else:
-                    if event.key == pygame.K_UP or event.key == pygame.K_w:
+                    if music_enable or sound_enable:
+                        if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                            pos_x -= 1
+                        elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                            pos_x += 1
+                    elif event.key == pygame.K_UP or event.key == pygame.K_w:
                         pos_y -= 1
                     elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
                         pos_y += 1
@@ -462,18 +526,26 @@ def settings(scr, where='menu'):
                         pos_x -= 1
                     elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
                         pos_x += 1
-                    elif event.key == pygame.K_ESCAPE:
-                        if prev_screen == 'pause':
+                    if event.key == pygame.K_ESCAPE:
+                        if music_enable:
+                            music_enable = False
+                            pos_x = 0
+                        elif sound_enable:
+                            sound_enable = False
+                            pos_x = 0
+                        elif prev_screen == 'pause':
                             return 'pause'
                         else:
                             return 'main_menu'
                     elif event.key == pygame.K_SPACE:
                         if where == 'game':
                             pos_y = pos_y % 2
+                        if music_enable or sound_enable:
+                            pos_x = pos_x % 2 + 1
                         pos_x = pos_x % 3
                         if pos_y % len(settings_rects[0]) == 0:
                             if pos_x == 0:
-                                pos_x += 1
+                                music_enable = True
                             elif pos_x == 1:
                                 music_volume = (music_volume + 1) % 11
                                 settings_rects[3][0].kill()
@@ -486,7 +558,7 @@ def settings(scr, where='menu'):
                                                                       f'{music_volume}', settings_buttons)
                         elif pos_y % len(settings_rects[0]) == 1:
                             if pos_x == 0:
-                                pos_x += 1
+                                sound_enable = True
                             elif pos_x == 1:
                                 sound_volume = (sound_volume + 1) % 11
                                 settings_rects[3][1].kill()
@@ -511,14 +583,16 @@ def settings(scr, where='menu'):
                 if where == 'game':
                     settings_rects[pos_x % 3][pos_y % 2].checked_draw(scr)
                 else:
-                    if pos_y % 3 == 2 and len(settings_rects[0]) != 4:
-                        settings_rects[0][pos_y % 3].checked_draw(scr)
-                    elif len(settings_rects[0]) == 4 and (pos_y % 4 == 3 or pos_y % 4 == 2):
-                        settings_rects[0][pos_y % 4].checked_draw(scr)
-                    elif len(settings_rects[0]) != 4:
-                        settings_rects[pos_x % 3][pos_y % 3].checked_draw(scr)
+                    if music_enable or sound_enable:
+                        if len(settings_rects[0]) == 4:
+                            settings_rects[pos_x % 2 + 1][pos_y % 4].checked_draw(scr)
+                        else:
+                            settings_rects[pos_x % 2 + 1][pos_y % 3].checked_draw(scr)
                     else:
-                        settings_rects[pos_x % 3][pos_y % 4].checked_draw(scr)
+                        if len(settings_rects[0]) == 4:
+                            settings_rects[0][pos_y % 4].checked_draw(scr)
+                        else:
+                            settings_rects[0][pos_y % 3].checked_draw(scr)
                 pygame.display.flip()
 
 
