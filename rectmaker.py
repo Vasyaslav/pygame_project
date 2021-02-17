@@ -193,7 +193,6 @@ def main_game(scr):
             self.rect = self.image.get_rect()
             self.rect.x = pos[0] + dp[0]
             self.rect.y = pos[1] + dp[1]
-            print(self.rect, 1)
 
     class berry(pygame.sprite.Sprite):
         def __init__(self, pos, params, dp, group):
