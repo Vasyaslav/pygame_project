@@ -1,6 +1,8 @@
 import pygame
 import os
 import sys
+import heapq
+import pprint
 from PIL import Image, ImageSequence
 
 
@@ -114,12 +116,57 @@ def main_game(scr):
     berries_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
     main_hero = pygame.sprite.Group()
+    enemies = pygame.sprite.Group()
     tablets = pygame.sprite.Group()
     checker_group = pygame.sprite.Group()
     main_game_event = pygame.USEREVENT + 4
-    pygame.time.set_timer(main_game_event, 500)
+    pygame.time.set_timer(main_game_event, 250)
     pac_man_timer = pygame.USEREVENT + 6
-    pygame.time.set_timer(pac_man_timer, 500)
+    enemies_timer = pygame.USEREVENT + 7
+    pygame.time.set_timer(pac_man_timer, 250)
+    pygame.time.set_timer(enemies_timer, 250)
+
+    class enemy_1(pygame.sprite.Sprite):
+        def __init__(self, pos):
+            super().__init__(enemies)
+            pars = sorted(lvl_params[1:3])[0]
+            self.image = pygame.surface.Surface((40, 40))
+            self.image.fill((0, 0, 0))
+            pygame.draw.circle(self.image, (245, 160, 60), (20, 20),
+                               21)
+            self.image = pygame.transform.scale(red_ghost_im, (int(pars), int(pars)))
+            self.rect = self.image.get_rect()
+            self.rect.x = pos[0]
+            self.rect.y = pos[1]
+
+        def update(self, ev):
+            if ev.type == enemies_timer:
+                start = ((self.rect.x - 350) // lvl_params[1], self.rect.y // lvl_params[2])
+                where = ((PacMan.rect.x - 350) // lvl_params[1], PacMan.rect.y // lvl_params[2])
+                INF = 0
+                x, y = start
+                dist = [[INF] * len(lvl_params[0]) for x in range(len(lvl_params[0]))]
+                dist[y][x] = 13
+                prev = [[None] * len(lvl_params[0]) for x in range(len(lvl_params[0]))]
+                queue = [(x, y)]
+                while queue:
+                    x, y = queue.pop(0)
+                    for dx, dy in (1, 0), (0, 1), (-1, 0), (0, -1):
+                        next_x, next_y = x + dx, y + dy
+                        if lvl_params[-1][next_y][next_x] != 0 and dist[next_y][next_x] == INF:
+                            dist[next_y][next_x] = dist[y][x] + 1
+                            prev[next_y][next_x] = (x, y)
+                            queue.append((next_x, next_y))
+                x, y = where
+                if start == where or dist[y][x] == INF:
+                    target = False
+                else:
+                    while prev[y][x] != start:
+                        x, y = prev[y][x]
+                    target = x, y
+                if target:
+                    self.rect.x += (target[0] - start[0]) * lvl_params[1]
+                    self.rect.y += (target[1] - start[1]) * lvl_params[2]
 
     class pacman(pygame.sprite.Sprite):
         def __init__(self, pos):
@@ -173,13 +220,13 @@ def main_game(scr):
                         self.rect.x += self.dp[0]
             pygame.sprite.spritecollide(self, berries_group, True)
             if pygame.sprite.spritecollide(self, tablets, True):
-                pygame.time.set_timer(pac_man_timer, 250)
+                pygame.time.set_timer(pac_man_timer, 100)
                 self.speed = True
             if self.speed and event.type == pac_man_timer:
                 if self.how_long == 16:
                     self.speed = False
                     self.how_long = 0
-                    pygame.time.set_timer(pac_man_timer, 500)
+                    pygame.time.set_timer(pac_man_timer, 250)
                 else:
                     self.how_long += 1
 
@@ -249,7 +296,7 @@ def main_game(scr):
                             tablet((y * block_w + 350, i * block_h),
                                    (table_w, table_h),
                                    (block_w // 2 - table_w // 2, ber_h // 1.5), tablets)
-            return [lvl, block_w, block_h, ber_w, ber_h, (0, 0)]
+            return [lvl, block_w, block_h, ber_w, ber_h, [lvl_params[-2][0], lvl_params[-2][1]], lvl_params[-1]]
         # Загрузка с файла
         with open(lvl_file, 'r') as lvl:
             lvl = lvl.read().split('\n')
@@ -260,7 +307,9 @@ def main_game(scr):
             table_w = 480 // len(sorted(lvl, key=lambda z: len(z))[0])
             table_h = 510 // len(lvl)
             pac_pos = 0
+            lvl_ints = []
             for i in range(len(lvl)):
+                int_row = ''
                 for y in range(len(lvl[i])):
                     if y < 28:
                         if lvl[i][y] == '.':
@@ -274,20 +323,42 @@ def main_game(scr):
                             tablet((y * block_w + 350, i * block_h),
                                    (table_w, table_h),
                                    (block_w // 2 - table_w // 2, ber_h // 1.5), tablets)
-            return [lvl, block_w, block_h, ber_w, ber_h, pac_pos]
+                        elif lvl[i][y] == 'R':
+                            enemy_pos = y * block_w + 350, i * block_h
+                        if lvl[i][y] == '.':
+                            int_row += '0'
+                        else:
+                            int_row += '1'
+                lvl_ints.append([int(char) for char in int_row])
+            return [lvl, block_w, block_h, ber_w, ber_h, [pac_pos, enemy_pos], lvl_ints]
 
     if save_lvl == '':
         lvl_params = load_lvl(os.path.join('data', cur_lvl))
     else:
-        load_lvl(save_lvl)
-    PacMan = pacman(lvl_params[-1])
+        lvl_params = load_lvl(save_lvl)
+    PacMan = pacman(lvl_params[-2][0])
+    RedGhost = enemy_1(lvl_params[-2][1])
+    # Если выйти в главное меню и зайти обратно в игру, то враг ультра ускорится, поэтому ставлю его таймер ещё раз
+    pygame.time.set_timer(enemies_timer, 250)
     main_game_running = True
     while main_game_running:
         for event in pygame.event.get():
-            main_hero.update(event)
             if event.type == pygame.QUIT:
                 return 'quit'
-            if event.type == main_game_event:
+            if event.type == pac_man_timer:
+                main_hero.update(event)
+                scr.fill((0, 0, 0))
+                berries_group.draw(scr)
+                walls_group.draw(scr)
+                main_hero.draw(scr)
+                tablets.draw(scr)
+                enemies.draw(scr)
+                pygame.display.flip()
+            if event.type == enemies_timer:
+                enemies.update(event)
+                pygame.display.flip()
+            if event.type == pygame.KEYDOWN:
+                main_hero.update(event)
                 save_lvl = ''
                 # Цикл создающий длинную строку, содержащую карту(x - column, y - raw)
                 for raw in range(len(lvl_params[0])):
@@ -312,19 +383,16 @@ def main_game(scr):
                 save_lvl = save_lvl.split('\n')[:-1]
                 # Cрань для записи положения ГГ в список строк(карту).
                 # Она не помещадась в 1 строчку поэтому разбил её на 2.
-                before_player = save_lvl[PacMan.rect.y // lvl_params[2]][:(PacMan.rect.x - 350) // lvl_params[1]] + 'P'
-                after_him = save_lvl[PacMan.rect.y // lvl_params[2]][(PacMan.rect.x - 350) // lvl_params[1] + 1:]
-                save_lvl[PacMan.rect.y // lvl_params[2]] = before_player + after_him
-                lvl_params[-1] = (PacMan.rect.x, PacMan.rect.y)
-            if event.type == pygame.KEYDOWN:
+                ### Пока не нужна, т.к враг определяет положение гг оп координатам
+                #before_player = save_lvl[PacMan.rect.y // lvl_params[2]][:(PacMan.rect.x - 350) // lvl_params[1]] + 'P'
+                # after_him = save_lvl[PacMan.rect.y // lvl_params[2]][(PacMan.rect.x - 350) // lvl_params[1] + 1:]
+                # save_lvl[PacMan.rect.y // lvl_params[2]] = before_player + after_him
+                lvl_params[-2][0] = PacMan.rect.x, PacMan.rect.y
+                lvl_params[-2][1] = RedGhost.rect.x, RedGhost.rect.y
                 if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
-                    return 'pause'
-        scr.fill((0, 0, 0))
-        berries_group.draw(scr)
-        walls_group.draw(scr)
-        main_hero.draw(scr)
-        tablets.draw(scr)
-        pygame.display.flip()
+                    answer = pause(scr)
+                    if answer == 'main_menu':
+                        return 'main_menu'
 
 
 def pause(scr):
@@ -604,9 +672,10 @@ if __name__ == '__main__':
     rain_frames = frames_from_gif(ImageSequence.Iterator(Image.open(os.path.join('data', 'rain.gif'))))
     main_menu_image = load_image('main_menu.png')
     pac_image = load_image('pacman.png')
+    red_ghost_im = load_image('red_ghost.jpg', -1)
     cur_lvl = 'lvl.txt'
     save_lvl = ''
-    lvl_params = [0, 0, 0, 0, 0, (0, 0)]
+    lvl_params = [0, 0, 0, 0, 0, (0, 0), 0]
 
     running = True
     # Стартовое окно
