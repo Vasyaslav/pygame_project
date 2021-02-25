@@ -1,8 +1,6 @@
 import pygame
 import os
 import sys
-import heapq
-import pprint
 from PIL import Image, ImageSequence
 
 
