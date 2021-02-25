@@ -1,138 +1,42 @@
 import pygame
 import os
 import sys
+import random
+from playing_objs import *
 from PIL import Image, ImageSequence
-
-
-def cacher(some_func):
-    cache = {}
-
-    def new(arg, key):
-        if key in cache:
-            return cache[key]
-        else:
-            cache[key] = some_func(arg, key)
-            return cache[key]
-
-    return new
-
-
-def load_image(name, colorkey=None):
-    fullname = os.path.join('data', name)
-    if not os.path.isfile(fullname):
-        print(f"Файл с изображением '{fullname}' не найден")
-        sys.exit()
-    image = pygame.image.load(fullname)
-    if colorkey is not None:
-        image = image.convert()
-        if colorkey == -1:
-            colorkey = image.get_at((0, 0))
-        image.set_colorkey(colorkey)
-    else:
-        image = image.convert_alpha()
-    return image
-
-
-def frames_from_gif(frames):
-    res = []
-    for frame in frames:
-        image = frame.copy()
-        image = image.crop((0, 0, image.width, image.height - 15))
-        res.append(image)
-    return res
-
-
-@cacher
-def normal_frames(some_frames, key):
-    norm_frames = []
-    n = 0
-    for i in some_frames:
-        cur_image = i
-        image_mode = cur_image.mode
-        image_size = cur_image.size
-        image_data = cur_image.tobytes()
-        norm_image = pygame.transform.scale(pygame.image.fromstring(image_data, image_size, image_mode),
-                                            (1600, 900))
-        new_palette = []
-        rgb_triplet = []
-        # Из восьмибитной поверхности в поверхность rgb
-        for rgb_value in cur_image.getpalette():
-            rgb_triplet.append(rgb_value)
-            if len(rgb_triplet) == 3:
-                new_palette.append((rgb_triplet[0], rgb_triplet[1], rgb_triplet[2]))
-                rgb_triplet = []
-        norm_image.set_palette(new_palette)
-        norm_frames.append((norm_image, n))
-        n += 1
-    return norm_frames
-
-
-class Beautiful_rect(pygame.sprite.Sprite):
-    """Класс для создания прямоугольников с текстом которые можно выделить"""
-
-    def __init__(self, x, y, w, h, color, color_2, text, group):
-        super().__init__(group)
-        self.image = pygame.Surface((w, h))
-        font = pygame.font.Font(os.path.join('data', '1_Minecraft-Regular.otf'), 50)
-        self.text = font.render(text, True, (254, 254, 34))
-        self.text_x = x + (w - self.text.get_width()) // 2
-        self.text_y = y + (h - self.text.get_height()) // 2
-        self.image.blit(self.text, (self.text_x - x, self.text_y - y))
-        pygame.draw.rect(self.image, color, (0, 0, w, h), 7)
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
-        self.color_2 = color_2
-
-    def checked_draw(self, scr):
-        pygame.draw.rect(scr, self.color_2, ((self.rect.x - 5, self.rect.y - 5),
-                                             (self.rect.width + 10, self.rect.height + 10)), 5)
-
-
-class Particles(pygame.sprite.Sprite):
-    drop = pygame.Surface((2, 8))
-    pygame.draw.rect(drop, (135, 186, 220), (0, 0, 2, 8), 1)
-
-    def __init__(self, pos, dx, dy, group):
-        super().__init__(group)
-        self.image = Particles.drop
-        self.rect = self.image.get_rect()
-        self.gravity = 0.5
-        self.rect.x, self.rect.y = pos
-        self.velocity = [dx, dy]
-
-    def update(self, group=None):
-        self.velocity[1] += self.gravity
-        self.rect.x += self.velocity[0]
-        self.rect.y += self.velocity[1]
-        if not self.rect.colliderect((0, 0, 1600, 900)):
-            self.kill()
 
 
 def main_game(scr):
     global cur_lvl, lvl_params, save_lvl
     berries_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
-    main_hero = pygame.sprite.Group()
-    enemies = pygame.sprite.Group()
     tablets = pygame.sprite.Group()
+    particale_group = pygame.sprite.Group()
     checker_group = pygame.sprite.Group()
-    main_game_event = pygame.USEREVENT + 4
-    pygame.time.set_timer(main_game_event, 250)
+
+    main_hero = pygame.sprite.Group()
     pac_man_timer = pygame.USEREVENT + 6
-    enemies_timer = pygame.USEREVENT + 7
     pygame.time.set_timer(pac_man_timer, 250)
-    pygame.time.set_timer(enemies_timer, 250)
+
+    enemies = pygame.sprite.Group()
+    enemies_timer = pygame.USEREVENT + 7
+    pygame.time.set_timer(enemies_timer, 300)
+
+    main_game_event = pygame.USEREVENT + 4
+    pygame.time.set_timer(main_game_event, 50)
+
+    ending = False
+    ending_timer = 0
 
     class enemy_1(pygame.sprite.Sprite):
-        def __init__(self, pos):
-            super().__init__(enemies)
-            pars = sorted(lvl_params[1:3])[0]
+        def __init__(self, pos, group):
+            super().__init__(group)
+            self.pars = sorted(lvl_params[1:3])[0]
             self.image = pygame.surface.Surface((40, 40))
             self.image.fill((0, 0, 0))
             pygame.draw.circle(self.image, (245, 160, 60), (20, 20),
                                21)
-            self.image = pygame.transform.scale(red_ghost_im, (int(pars), int(pars)))
+            self.image = pygame.transform.scale(red_ghost_im, (int(self.pars), int(self.pars)))
             self.rect = self.image.get_rect()
             self.rect.x = pos[0]
             self.rect.y = pos[1]
@@ -167,17 +71,17 @@ def main_game(scr):
                     self.rect.y += (target[1] - start[1]) * lvl_params[2]
 
     class pacman(pygame.sprite.Sprite):
-        def __init__(self, pos):
-            super().__init__(main_hero)
-            pars = sorted(lvl_params[1:3])[0]
-            self.image = pygame.transform.scale(pac_image, (int(pars), int(pars)))
+        def __init__(self, pos, group):
+            super().__init__(group)
+            self.pars = sorted(lvl_params[1:3])[0]
+            self.image = pygame.transform.scale(pac_image, (int(self.pars), int(self.pars)))
             self.right_image = self.image
             self.left_image = pygame.transform.flip(self.image, True, False)
             self.up_image = pygame.transform.rotate(self.image, 90)
             self.down_image = pygame.transform.rotate(self.image, 270)
             self.true_im = 'r'
             self.rect = self.image.get_rect()
-            self.dp = [pars, '']
+            self.dp = [self.pars, '']
             self.next = ''
             self.rect.x = pos[0]
             self.rect.y = pos[1]
@@ -186,20 +90,66 @@ def main_game(scr):
             self.how_long = 0
 
         def update(self, ev):
+            """Функция, обрабатывающая: нажатия на клавиатуре, срабатывание таймера, пересечение с ягодками"""
             if event.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_w or ev.key == pygame.K_UP:
                     self.image = self.up_image
-                    self.dp[1] = 'w'
+                    if len([
+                        wall for wall in walls_group if wall.rect.y == self.rect.y - self.pars \
+                                                        and wall.rect.x == self.rect.x]):
+                        self.next = 'w'
+                    else:
+                        self.dp[1] = 'w'
                 elif ev.key == pygame.K_s or ev.key == pygame.K_DOWN:
                     self.image = self.down_image
-                    self.dp[1] = 's'
+                    if len([
+                        wall for wall in walls_group if wall.rect.y == self.rect.y + self.pars \
+                                                        and wall.rect.x == self.rect.x]):
+                        self.next = 's'
+                    else:
+                        self.dp[1] = 's'
                 elif ev.key == pygame.K_d or ev.key == pygame.K_RIGHT:
                     self.image = self.right_image
-                    self.dp[1] = 'd'
+                    if len([
+                        wall for wall in walls_group if wall.rect.x == self.rect.x + self.pars \
+                                                        and wall.rect.y == self.rect.y]):
+                        self.next = 'd'
+                    else:
+                        self.dp[1] = 'd'
                 elif ev.key == pygame.K_a or ev.key == pygame.K_LEFT:
                     self.image = self.left_image
-                    self.dp[1] = 'a'
-            elif event.type == pac_man_timer:
+                    if len([
+                        wall for wall in walls_group if wall.rect.x == self.rect.x - self.pars \
+                                                        and wall.rect.y == self.rect.y]):
+                        self.next = 'a'
+                    else:
+                        self.dp[1] = 'a'
+            if self.next:
+                if self.next == 'w':
+                    if not len([
+                        wall for wall in walls_group if wall.rect.y == self.rect.y - self.pars \
+                                                        and wall.rect.x == self.rect.x]):
+                        self.dp[1] = 'w'
+                        self.next = ''
+                elif self.next == 's':
+                    if not len([
+                        wall for wall in walls_group if wall.rect.y == self.rect.y + self.pars \
+                                                        and wall.rect.x == self.rect.x]):
+                        self.dp[1] = 's'
+                        self.next = ''
+                elif self.next == 'd':
+                    if not len([
+                        wall for wall in walls_group if wall.rect.x == self.rect.x + self.pars \
+                                                        and wall.rect.y == self.rect.y]):
+                        self.dp[1] = 'd'
+                        self.next = ''
+                elif self.next == 'a':
+                    if not len([
+                        wall for wall in walls_group if wall.rect.x == self.rect.x - self.pars \
+                                                        and wall.rect.y == self.rect.y]):
+                        self.dp[1] = 'a'
+                        self.next = ''
+            if event.type == pac_man_timer:
                 if self.dp[1] == 'w':
                     self.rect.y -= self.dp[0]
                     if pygame.sprite.spritecollideany(self, walls_group):
@@ -218,59 +168,15 @@ def main_game(scr):
                         self.rect.x += self.dp[0]
             pygame.sprite.spritecollide(self, berries_group, True)
             if pygame.sprite.spritecollide(self, tablets, True):
-                pygame.time.set_timer(pac_man_timer, 100)
+                pygame.time.set_timer(pac_man_timer, 180)
                 self.speed = True
             if self.speed and event.type == pac_man_timer:
-                if self.how_long == 16:
+                if self.how_long == 24:
                     self.speed = False
                     self.how_long = 0
                     pygame.time.set_timer(pac_man_timer, 250)
                 else:
                     self.how_long += 1
-
-    class tablet(pygame.sprite.Sprite):
-        def __init__(self, pos, params, dp, group):
-            super().__init__(group)
-            self.image = pygame.surface.Surface(params)
-            self.image.fill((0, 0, 0))
-            pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
-                               ((params[0] + params[1]) + (dp[0] + dp[1]) // 2) / 5)
-            self.rect = self.image.get_rect()
-            self.rect.x = pos[0] + dp[0]
-            self.rect.y = pos[1] + dp[1]
-
-    class berry(pygame.sprite.Sprite):
-        def __init__(self, pos, params, dp, group):
-            """pos - x, y; params - w, h; dp - сдвиг, чтоб по центру было"""
-            super().__init__(group)
-            self.image = pygame.surface.Surface(params)
-            self.image.fill((0, 0, 0))
-            pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
-                               (params[0] + params[1]) / 4)
-            self.rect = self.image.get_rect()
-            self.rect.x = pos[0] + dp[0]
-            self.rect.y = pos[1] + dp[1]
-
-    class wall(pygame.sprite.Sprite):
-        def __init__(self, pos, params, group):
-            """pos - x, y; params - w, h;"""
-            super().__init__(group)
-            self.image = pygame.surface.Surface(params)
-            pygame.draw.rect(self.image, (65, 105, 225), ((params[0] / 100, params[1] / 100),
-                                                          (params[0] - params[0] / 100, params[1] - params[1] / 100)))
-            self.rect = self.image.get_rect()
-            self.rect.x = pos[0]
-            self.rect.y = pos[1]
-
-    class checker(pygame.sprite.Sprite):
-        def __init__(self, pos, params, group):
-            super().__init__(group)
-            self.image = pygame.surface.Surface(params)
-            pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
-                               (params[0] + params[1]) / 4)
-            self.rect = self.image.get_rect()
-            self.rect.x = pos[0]
-            self.rect.y = pos[1]
 
     def load_lvl(lvl_file):
         # Загрузка с сохранения
@@ -305,6 +211,7 @@ def main_game(scr):
             table_w = 480 // len(sorted(lvl, key=lambda z: len(z))[0])
             table_h = 510 // len(lvl)
             pac_pos = 0
+            enemy_pos = (-1, -1)
             lvl_ints = []
             for i in range(len(lvl)):
                 int_row = ''
@@ -334,16 +241,21 @@ def main_game(scr):
         lvl_params = load_lvl(os.path.join('data', cur_lvl))
     else:
         lvl_params = load_lvl(save_lvl)
-    PacMan = pacman(lvl_params[-2][0])
-    RedGhost = enemy_1(lvl_params[-2][1])
+    PacMan = pacman(lvl_params[-2][0], main_hero)
+    if lvl_params[-2][1] != (-1, -1):
+        RedGhost = enemy_1(lvl_params[-2][1], enemies)
     # Если выйти в главное меню и зайти обратно в игру, то враг ультра ускорится, поэтому ставлю его таймер ещё раз
-    pygame.time.set_timer(enemies_timer, 250)
+    pygame.time.set_timer(enemies_timer, 300)
     main_game_running = True
     while main_game_running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return 'quit'
-            if event.type == pac_man_timer:
+            if event.type == pac_man_timer and not ending:
+                if len(berries_group) == 0:
+                    winning()
+                    save_lvl = ''
+                    return 'main_menu'
                 main_hero.update(event)
                 scr.fill((0, 0, 0))
                 berries_group.draw(scr)
@@ -352,9 +264,23 @@ def main_game(scr):
                 tablets.draw(scr)
                 enemies.draw(scr)
                 pygame.display.flip()
-            if event.type == enemies_timer:
+            if event.type == enemies_timer and not ending:
                 enemies.update(event)
                 pygame.display.flip()
+            if lvl_params[-2][1] != (-1, -1):
+                if PacMan.rect == RedGhost.rect:
+                    for i in range(100):
+                        particle = Particles((PacMan.rect.x, PacMan.rect.y),
+                                             random.choice(range(-5, 5)),
+                                             random.choice(range(-5, 5)), particale_group)
+                    ending = True
+                    losing()
+                    save_lvl = ''
+                    return 'main_menu'
+                if event.type == main_game_event and ending:
+                    particale_group.draw(scr)
+                    particale_group.update(scr)
+                    pygame.display.flip()
             if event.type == pygame.KEYDOWN:
                 main_hero.update(event)
                 save_lvl = ''
@@ -382,11 +308,12 @@ def main_game(scr):
                 # Cрань для записи положения ГГ в список строк(карту).
                 # Она не помещадась в 1 строчку поэтому разбил её на 2.
                 ### Пока не нужна, т.к враг определяет положение гг оп координатам
-                #before_player = save_lvl[PacMan.rect.y // lvl_params[2]][:(PacMan.rect.x - 350) // lvl_params[1]] + 'P'
+                # before_player = save_lvl[PacMan.rect.y // lvl_params[2]][:(PacMan.rect.x - 350) // lvl_params[1]] + 'P'
                 # after_him = save_lvl[PacMan.rect.y // lvl_params[2]][(PacMan.rect.x - 350) // lvl_params[1] + 1:]
                 # save_lvl[PacMan.rect.y // lvl_params[2]] = before_player + after_him
                 lvl_params[-2][0] = PacMan.rect.x, PacMan.rect.y
-                lvl_params[-2][1] = RedGhost.rect.x, RedGhost.rect.y
+                if lvl_params[-2][1] != (-1, -1):
+                    lvl_params[-2][1] = RedGhost.rect.x, RedGhost.rect.y
                 if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
                     answer = pause(scr)
                     if answer == 'main_menu':
@@ -550,11 +477,19 @@ def settings(scr, where='menu'):
                                            settings_buttons))
                         if len(lvl) > 4:
                             if lvl[-4:] == '.txt' and lvl in os.listdir(path="data"):
-                                settings_rects[0][3].kill()
-                                settings_rects[0][3] = Beautiful_rect(500, 690, 630, 80, (23, 254, 25), (254, 140, 23),
-                                                                      lvl, settings_buttons)
-                                cur_lvl = lvl
-                                save_lvl = ''
+                                with open(os.path.join('data', lvl), 'r') as file:
+                                    strs = file.read()
+                                    # Проверка чтобы карты была квадратной(создаётся список с единиицами где единиица
+                                    # ставится если длина строки равна длине файла, находится сумма этого списка и
+                                    # сравнивается с длиной файла
+                                    if len(strs.split('\n')) == sum(
+                                            [1 for i in strs.split('\n') if len(i) == len(strs.split('\n'))]):
+                                        settings_rects[0][3].kill()
+                                        settings_rects[0][3] = Beautiful_rect(500, 690, 630, 80, (23, 254, 25),
+                                                                              (254, 140, 23),
+                                                                              lvl, settings_buttons)
+                                        cur_lvl = lvl
+                                        save_lvl = ''
                         lvl = ''
                     elif event.key == pygame.K_ESCAPE:
                         all_disable = False
