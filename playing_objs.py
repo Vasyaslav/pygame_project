@@ -3,6 +3,7 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QApplication
 import os
 import sys
+import sqlite3
 
 
 # Функции, которые не задействованы в какой-то одной большой функции
@@ -160,30 +161,72 @@ class checker(pygame.sprite.Sprite):
         self.rect.y = pos[1]
 
 
-def winning():
+def winning(map, time):
     class MyWidget(QMainWindow):
         def __init__(self):
             super().__init__()
+            self.setWindowTitle('Победа')
             uic.loadUi('wins.ui', self)
-            self.answer = self.saving.clicked.connect(self.run)
+            self.answer = ''
+            self.saving.clicked.connect(self.run)
 
         def run(self):
             if self.name.text():
-                return self.name.text()
+                self.answer = self.name.text()
             else:
-                return 'Неизвестный'
+                self.answer = 'Неизвестный'
+            if 'records.db' in os.listdir('data'):
+                try:
+                    path = os.path.join('data', 'records.db')
+                    conn = sqlite3.connect(path)
+                    cur = conn.cursor()
+                    all_maps = [mapi[0] for mapi in cur.execute(f'''SELECT Карта FROM Результат''').fetchall()]
+                    if map in all_maps:
+                        old_time = cur.execute(f'''SELECT Время FROM Результат
+                                   WHERE Карта = '{map}' ''').fetchone()[0]
+                        if time <= old_time:
+                            cur.execute(f'''UPDATE Результат
+                                        SET Время = '{str(time)} сек'
+                                        WHERE Карта = '{map}' ''')
+                            cur.execute(f'''UPDATE Результат
+                                        SET Имя = '{self.answer}'
+                                        WHERE Карта = '{map}' ''')
+                    else:
+                        cur.execute(f'''INSERT INTO Результат (Карта, Имя, Время)
+                                        VALUES('{map}', '{self.answer}', '{str(time)} сек')''')
+                    conn.commit()
+                except Exception as e:
+                    print(e)
+            else:
+                try:
+                    path = os.path.join('data', 'records.db')
+                    conn = sqlite3.connect(path)
+                    cur = conn.cursor()
+                    cur.execute('''CREATE TABLE Результат (
+                               id INTEGER PRIMARY KEY AUTOINCREMENT
+                               UNIQUE
+                               NOT NULL,
+                               Карта STRING NOT NULL,
+                               Имя STRING NOT NULL,
+                               Время STRING NOT NULL);''')
+                    cur.execute(f'''INSERT INTO Результат (Карта, Имя, Время)
+                                    VALUES('{map}', '{self.answer}', '{str(time)} сек')''')
+                    conn.commit()
+                except Exception as e:
+                    print(e)
+            self.close()
 
     app = QApplication(sys.argv)
     ex = MyWidget()
     ex.show()
     app.exec_()
-    return ex.answer
 
 
 def losing():
     class MyWidget(QMainWindow):
         def __init__(self):
             super().__init__()
+            self.setWindowTitle('Поражение')
             uic.loadUi('loses.ui', self)
             self.finish.clicked.connect(self.run)
 
