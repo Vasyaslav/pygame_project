@@ -1,13 +1,11 @@
 import pygame
-import os
-import sys
 import random
 from playing_objs import *
 from PIL import Image, ImageSequence
 
 
 def main_game(scr):
-    global cur_lvl, lvl_params, save_lvl
+    global cur_lvl, lvl_params, save_lvl, timer
     berries_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
     tablets = pygame.sprite.Group()
@@ -25,8 +23,17 @@ def main_game(scr):
     main_game_event = pygame.USEREVENT + 4
     pygame.time.set_timer(main_game_event, 50)
 
+    just_timer = pygame.USEREVENT + 8
+    pygame.time.set_timer(just_timer, 1000)
+
+    timer_group = pygame.sprite.Group()
+    Beautiful_rect(100, 100, 150, 60, (255, 160, 122),
+                   (173, 255, 47),
+                   ':'.join((str(timer // 60).rjust(2, '0'), str(timer % 60).rjust(2, '0'))),
+                   timer_group)
+    timer_group.draw(scr)
+
     ending = False
-    ending_timer = 0
 
     class enemy_1(pygame.sprite.Sprite):
         def __init__(self, pos, group):
@@ -251,9 +258,16 @@ def main_game(scr):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return 'quit'
+            if event.type == just_timer:
+                timer += 1
+                Beautiful_rect(100, 100, 150, 60, (255, 160, 122),
+                               (173, 255, 47),
+                               ':'.join((str(timer // 60).rjust(2, '0'), str(timer % 60).rjust(2, '0'))),
+                               timer_group)
             if event.type == pac_man_timer and not ending:
                 if len(berries_group) == 0:
-                    winning()
+                    winning(cur_lvl, timer)
+                    timer = 0
                     save_lvl = ''
                     return 'main_menu'
                 main_hero.update(event)
@@ -263,24 +277,34 @@ def main_game(scr):
                 main_hero.draw(scr)
                 tablets.draw(scr)
                 enemies.draw(scr)
+                timer_group.draw(scr)
                 pygame.display.flip()
             if event.type == enemies_timer and not ending:
                 enemies.update(event)
                 pygame.display.flip()
             if lvl_params[-2][1] != (-1, -1):
                 if PacMan.rect == RedGhost.rect:
-                    for i in range(100):
-                        particle = Particles((PacMan.rect.x, PacMan.rect.y),
-                                             random.choice(range(-5, 5)),
-                                             random.choice(range(-5, 5)), particale_group)
-                    ending = True
-                    losing()
-                    save_lvl = ''
-                    return 'main_menu'
-                if event.type == main_game_event and ending:
-                    particale_group.draw(scr)
-                    particale_group.update(scr)
-                    pygame.display.flip()
+                    if not PacMan.speed:
+                        for i in range(150):
+                            particle = Particles((PacMan.rect.x, PacMan.rect.y),
+                                                 random.choice(range(-5, 5)),
+                                                 random.choice(range(-5, 5)), particale_group)
+                        for i in range(30):
+                            particale_group.update(scr)
+                            particale_group.draw(scr)
+                        pygame.display.flip()
+                        losing()
+                        save_lvl = ''
+                        return 'main_menu'
+                    else:
+                        al = 0
+                        while al != 1:
+                            new_enemy_pos = (random.choice(range(len(lvl_params[0]))),
+                                             random.choice(range(len(lvl_params[0]))))
+                            if save_lvl[new_enemy_pos[0]][new_enemy_pos[1]] != '.':
+                                RedGhost.rect.x = 350 + new_enemy_pos[0] * lvl_params[1]
+                                RedGhost.rect.y = new_enemy_pos[1] * lvl_params[1]
+                                al = 1
             if event.type == pygame.KEYDOWN:
                 main_hero.update(event)
                 save_lvl = ''
@@ -609,6 +633,8 @@ if __name__ == '__main__':
     cur_lvl = 'lvl.txt'
     save_lvl = ''
     lvl_params = [0, 0, 0, 0, 0, (0, 0), 0]
+    # Таймер для игры
+    timer = 0
 
     running = True
     # Стартовое окно
