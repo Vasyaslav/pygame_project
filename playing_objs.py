@@ -184,16 +184,16 @@ def winning(map, time):
                     if map in all_maps:
                         old_time = cur.execute(f'''SELECT Время FROM Результат
                                    WHERE Карта = '{map}' ''').fetchone()[0]
-                        if time <= old_time:
+                        if time <= int(old_time.split(' ')[0]):
                             cur.execute(f'''UPDATE Результат
-                                        SET Время = '{str(time)} сек'
+                                        SET Время = '{str(time)} sec'
                                         WHERE Карта = '{map}' ''')
                             cur.execute(f'''UPDATE Результат
                                         SET Имя = '{self.answer}'
                                         WHERE Карта = '{map}' ''')
                     else:
                         cur.execute(f'''INSERT INTO Результат (Карта, Имя, Время)
-                                        VALUES('{map}', '{self.answer}', '{str(time)} сек')''')
+                                        VALUES('{map}', '{self.answer}', '{str(time)} sec')''')
                     conn.commit()
                 except Exception as e:
                     print(e)
@@ -210,7 +210,7 @@ def winning(map, time):
                                Имя STRING NOT NULL,
                                Время STRING NOT NULL);''')
                     cur.execute(f'''INSERT INTO Результат (Карта, Имя, Время)
-                                    VALUES('{map}', '{self.answer}', '{str(time)} сек')''')
+                                    VALUES('{map}', '{self.answer}', '{str(time)} sec')''')
                     conn.commit()
                 except Exception as e:
                     print(e)
