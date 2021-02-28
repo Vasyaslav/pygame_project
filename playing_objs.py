@@ -118,7 +118,7 @@ class tablet(pygame.sprite.Sprite):
         super().__init__(group)
         self.image = pygame.surface.Surface(params)
         self.image.fill((0, 0, 0))
-        pygame.draw.circle(self.image, (245, 160, 60), (params[0] / 2, params[1] / 2),
+        pygame.draw.circle(self.image, (255, 20, 147), (params[0] / 2, params[1] / 2),
                            ((params[0] + params[1]) + (dp[0] + dp[1]) // 2) / 5)
         self.rect = self.image.get_rect()
         self.rect.x = pos[0] + dp[0]

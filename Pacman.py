@@ -489,7 +489,8 @@ def main_menu(scr):
                         return 'main_game'
                     elif pos_y % 4 == 1:
                         scr.fill((0, 0, 0))
-                        settings(scr, 'menu')
+                        if settings(scr, 'menu') == 'quit':
+                            return 'quit'
                     elif pos_y % 4 == 2:
                         return 'records'
                     elif pos_y % 4 == 3:
